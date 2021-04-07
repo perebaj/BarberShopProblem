@@ -7,132 +7,130 @@
 #define False 0
 #define True 1
 
-int _NUMBER_CHAIRS = 5;
-int current_customers = 0;
-int initial_customers = 25;
-int hair_cut_time = 0;
+int numeroCadeiras = 5;
+int clientesAtuais = 0;
+int clientesIniciais = 25;
+int tempoDeCorte = 0;
 
 
-void *customer();
-void get_hair_cut();
+void *cliente();
+void corteDeCabelo();
 void balk(int);
-void *barber();
-void cut_hair();
+void *barbeiro();
+void cortandoCabelo();
 
 //semaforos
-sem_t sem_cust;     //Cliente querendo cortar cabelo
+sem_t sem_cliente;     //Cliente querendo cortar cabelo
 sem_t sem_mutex;    //Controla a chegada de clientes na barbearia
-sem_t sem_barber;   //Define se o barbeiro está ocupado ou n
-sem_t sem_custDone; //Cliente terminou de cortar o cabelo
-sem_t sem_barbDone; //Barbeiro terminou de cortar cabelo
+sem_t sem_barbeiro;   //Define se o barbeiro está ocupado ou n
+sem_t sem_fimCliente; //Cliente terminou de cortar o cabelo
+sem_t sem_fimBarbeiro; //Barbeiro terminou de cortar cabelo
 
 int success = 0;
 
 int main()
 {
     pthread_t barber_id;
-    pthread_t customer_id[initial_customers];
-    int customer_num[initial_customers];
+    pthread_t cliente_id[clientesIniciais];
+    int cliente_num[clientesIniciais];
 
-    sem_init(&sem_cust, 0, 0);
+    sem_init(&sem_cliente, 0, 0);
     sem_init(&sem_mutex, 0, 1);
-    sem_init(&sem_barber, 0, 0);
-    sem_init(&sem_custDone, 0, 0);
-    sem_init(&sem_barbDone, 0, 0);
+    sem_init(&sem_barbeiro, 0, 0);
+    sem_init(&sem_fimCliente, 0, 0);
+    sem_init(&sem_fimBarbeiro, 0, 0);
 
     //Iniciando o thread barbeiro
-    pthread_create(&barber_id, NULL, *barber, NULL);
+    pthread_create(&barber_id, NULL, *barbeiro, NULL);
 
     //Iniciando todos threads de consumidores
-    for (int iterator = 0; iterator < initial_customers; iterator++)
+    for (int i = 0; i < clientesIniciais; i++)
     {
-        // pthread_create(&customer_id[iterator], NULL, customer, (void *)&customer_num[iterator]);
-        printf("\t\tCustomer %d arrives!\n", iterator);
-        pthread_create(&customer_id[iterator], NULL, customer, (void *) &iterator);
+        // pthread_create(&cliente_id[iterator], NULL, cliente, (void *)&cliente_num[iterator]);
+        printf("\t\tCliente %d chegou!\n", i + 1);
+        pthread_create(&cliente_id[i], NULL, cliente, (void *) &i);
         int rNum = rand() % 2 + 1;
 
         sleep(rNum);
     }
 
-    printf("\nOffice hour ended. Doors Closed.\n");
+    printf("\nFim dos clientes.\n");
     sleep(25);
-    printf("\nClosing Barbershop\n");
-    printf("Total gained today: $%d\n", success*5);
 
-    for (int iterator = 0; iterator < initial_customers; iterator++)
-        pthread_join(customer_id[iterator], NULL);
+    for (int i = 0; i < clientesIniciais; i++)
+        pthread_join(cliente_id[i], NULL);
     //pthread_join(barber_id, NULL);
 
-    sem_destroy(&sem_cust);
+    sem_destroy(&sem_cliente);
     sem_destroy(&sem_mutex);
-    sem_destroy(&sem_barber);
-    sem_destroy(&sem_custDone);
-    sem_destroy(&sem_barbDone);
+    sem_destroy(&sem_barbeiro);
+    sem_destroy(&sem_fimCliente);
+    sem_destroy(&sem_fimBarbeiro);
 
     return 0;
 }
 
-void *barber() {
+void *barbeiro() {
     while(1) {
-        sem_wait(&sem_cust);
-        sem_post(&sem_barber);
+        sem_wait(&sem_cliente);
+        sem_post(&sem_barbeiro);
 
-        printf("\t\t\t\tBarber is preparing to cut\n");
-        cut_hair();
-        printf("\t\t\t\t\t\tBarber Finished Cutting\n");
+        printf("\t\t\t\tBarbeiro chama o cliente para o corte\n");
+        cortandoCabelo();
+        printf("\t\t\t\t\t\tBarbeiro está terminando o corte do cliente\n");
         success++;
 
-        sem_post(&sem_barbDone);
-        sem_wait(&sem_custDone);
+        sem_post(&sem_fimBarbeiro);
+        sem_wait(&sem_fimCliente);
     }
 }
 
-void *customer(void * n) {
+void *cliente(void * n) {
     int num = *(int *)n;
     sem_wait(&sem_mutex);
-    if (current_customers == _NUMBER_CHAIRS) {
+    if (clientesAtuais == numeroCadeiras) {
         //Se nao ha cadeiras disponiveis, sai do salao
         sem_post(&sem_mutex);
         balk(num);
         return NULL;
     }
-    
-    current_customers++;
-    printf("\t\tCustomer %d is waiting\n", num);
+    printf("\t\tCliente %d acha uma cadeira livre\n", num + 1);
+    clientesAtuais++;
+    printf("\t\tCliente %d está esperando\n", num + 1);
     sem_post(&sem_mutex);
 
-    sem_post(&sem_cust);
-    sem_wait(&sem_barber);
+    sem_post(&sem_cliente);
+    sem_wait(&sem_barbeiro);
 
-        printf("\t\t\t\tCustomer %d is getting haircut\n", num);
-        hair_cut_time = rand() % 5 + 1;
-        get_hair_cut();
-        printf("\t\t\t\t\t\tCustomer %d finished cutting\n", num);
+        printf("\t\t\t\tCliente %d está cortando o cabelo\n", num + 1);
+        tempoDeCorte = rand() % 5 + 1;
+        corteDeCabelo();
+        printf("\t\t\t\t\t\tCliente %d terminou de cortar o cabelo\n", num + 1);
 
-    sem_post(&sem_custDone);
-    sem_wait(&sem_barbDone);
+    sem_post(&sem_fimCliente);
+    sem_wait(&sem_fimBarbeiro);
 
     sem_wait(&sem_mutex);
-    current_customers--;
+    clientesAtuais--;
     sem_post(&sem_mutex);
 
     return NULL;
 }
 
 void balk(int num) {
-    printf("Customer %d exited without cutting\n", num);
+    printf("Cliente %d saiu sem cortar o cabelo\n", num + 1);
     return;
 }
 
-void cut_hair() {
-    sleep(hair_cut_time);
+void cortandoCabelo() {
+    sleep(tempoDeCorte);
 }
 
-void get_hair_cut() {    
-    sleep(hair_cut_time);
+void corteDeCabelo() {    
+    sleep(tempoDeCorte);
 }
 
-// int cut_hair()
+// int cortandoCabelo()
 // // fala se o cabeleireiro esta cortando cabelo ou n
 // // Return:
 // //     {False} se o número de consumidores é igual a zero. Barbeiro nao está
@@ -141,9 +139,9 @@ void get_hair_cut() {
 // //     está cortando cabelo
 // {
 
-//     if (customers_inside_barbershop == 0)
+//     if (clientes_inside_barbershop == 0)
 //     {
-//         rand() % _NUMBER_CHAIRS * 2; //numero randomico incial de clientes
+//         rand() % numeroCadeiras * 2; //numero randomico incial de clientes
 
 //         return False;
 //     }
@@ -152,9 +150,9 @@ void get_hair_cut() {
 
 // int getHairCut()
 // {
-//     if (cut_hair())
+//     if (cortandoCabelo())
 //     {
-//         if (get_avaliable_chair() > 0 && get_avaliable_chair() < _NUMBER_CHAIRS)
+//         if (get_avaliable_chair() > 0 && get_avaliable_chair() < numeroCadeiras)
 //         {
 
 //             //sentar e esperar
@@ -171,7 +169,7 @@ void get_hair_cut() {
 //         pthread_mutex_lock(&lock);
 //         sleep(5);
 //         printf("\n Cortou o cabelo!!!\n");
-//         customers_inside_barbershop -= 1;
+//         clientes_inside_barbershop -= 1;
 //         pthread_mutex_unlock(&lock);
 //     }
 // }
