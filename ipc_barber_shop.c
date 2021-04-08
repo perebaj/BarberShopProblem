@@ -4,9 +4,6 @@
 #include <unistd.h>
 #include <semaphore.h>
 
-#define False 0
-#define True 1
-
 int numeroCadeiras = 5; //4 na sala de espera + 1 para corte
 int clientesAtuais = 0;
 int clientesTotais = 25;
@@ -20,7 +17,7 @@ void cortandoCabelo();
 
 //semaforos
 sem_t sem_cliente;     //Cliente querendo cortar cabelo
-sem_t sem_mutex;       //Controla a chegada de clientes na barbearia
+sem_t sem_mutex;       //Controla o fluxo de clientes na barbearia
 sem_t sem_barbeiro;    //Define se o barbeiro está ocupado ou n
 sem_t sem_fimCliente;  //Cliente terminou de cortar o cabelo
 sem_t sem_fimBarbeiro; //Barbeiro terminou de cortar cabelo
@@ -48,7 +45,7 @@ int main()
     for (int i = 0; i < clientesTotais; i++)
     {
         pthread_create(&cliente_id[i], NULL, cliente, (void *)&i);
-        int rNum = rand() % 2 + 1; //número aleatório para que as threads sejam geradas de tempo em tempo simulando os clientes chegando aleatoriamente
+        int rNum = rand() % 3 + 1; //número aleatório para que as threads sejam geradas de tempo em tempo simulando os clientes chegando aleatoriamente
         sleep(rNum);
     }
 
@@ -61,17 +58,17 @@ int main()
 
 void *barbeiro()
 {
-    
     while (1)
-    {
-        if(clientesAtuais == 0) {
+    {   
+        sem_wait(&sem_mutex);
+        if(clientesAtuais == 0)
             printf("\t\t\t\t\t\tBarbeiro foi dormir\n");
-            sem_wait(&sem_barbeiroDormindo);
-        }
+        sem_post(&sem_mutex);
+
         // primeiro rendezvous com a função cliente
         sem_wait(&sem_cliente);
         sem_post(&sem_barbeiro);
-
+        
         printf("\t\t\t\t\t\tBarbeiro chama o cliente para o corte\n");
         cortandoCabelo();
         corteConcluido++;
@@ -87,10 +84,11 @@ void *cliente(void *n)
     int num = *(int *)n;
     sem_wait(&sem_mutex);
     printf("\t\tCliente %d chegou!\n", num + 1);
+
     if (clientesAtuais == 0) {
         printf("\t\tCliente %d acorda o barbeiro\n", num + 1);
-        sem_post(&sem_barbeiroDormindo);
     }
+
     if (clientesAtuais == numeroCadeiras)
     {
         sem_post(&sem_mutex);
@@ -109,13 +107,13 @@ void *cliente(void *n)
     corteDeCabelo();
     printf("\t\t\t\t\t\tCliente %d terminou de cortar o cabelo\n", num + 1);
 
-    // segundo rendezvous com a função barbeiro
-    sem_post(&sem_fimCliente);
-    sem_wait(&sem_fimBarbeiro);
-
     sem_wait(&sem_mutex);
     clientesAtuais--;
     sem_post(&sem_mutex);
+
+    // segundo rendezvous com a função barbeiro
+    sem_post(&sem_fimCliente);
+    sem_wait(&sem_fimBarbeiro);
 
     return NULL;
 }
